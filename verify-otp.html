@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Email - PLC SimTel</title>
+    <script src="./auth-config.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Georgia, 'Times New Roman', Times, serif; background: #f4f6f9; color: #1a1a1a; }
+        .wrapper { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 30px; }
+        .card { background: #fff; border: 2px solid #dde2ea; border-radius: 12px; padding: 40px 35px; width: 100%; max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,0.07); text-align: center; }
+        .card h1 { font-size: 22px; margin-bottom: 10px; color: #343a40; }
+        .card p.subtitle { font-size: 13px; color: #666; margin-bottom: 24px; }
+        form { text-align: left; }
+        form label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 18px; }
+        form input { padding: 11px 14px; border: 1px solid #dde2ea; border-radius: 6px; font-size: 14px; font-weight: normal; font-family: inherit; }
+        #otp { letter-spacing: 6px; font-size: 18px; text-align: center; }
+        button { width: 100%; padding: 13px 0; background: #1a1a1a; color: #fff; border: 2px solid #1a1a1a; border-radius: 6px; font-size: 15px; letter-spacing: 1px; cursor: pointer; font-family: inherit; margin-top: 6px; }
+        button:hover { background: #fff; color: #1a1a1a; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .msg { font-size: 13px; margin-top: 12px; text-align: center; font-weight: 600; min-height: 18px; }
+        .msg.error { color: #e03e3e; }
+        .msg.success { color: #198754; }
+        .resend { text-align: center; margin-top: 16px; font-size: 13px; }
+        .resend a { color: #1a1a1a; cursor: pointer; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <div class="card">
+        <h1>Verify Your Email</h1>
+        <p class="subtitle">Enter the 6-digit code sent to your email address. It expires in 5 minutes.</p>
+
+        <form id="verifyForm">
+            <label>Email
+                <input type="email" id="email" required autocomplete="username">
+            </label>
+            <label>Verification Code
+                <input type="text" id="otp" required maxlength="6" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456">
+            </label>
+            <button type="submit" id="verifyBtn">Verify</button>
+            <p id="msgBox" class="msg"></p>
+        </form>
+
+        <p class="resend">Didn't get a code? <a id="resendLink">Resend</a></p>
+    </div>
+</div>
+
+<script>
+    const cfg = window.SIMTEL_AUTH_CONFIG;
+
+    const form = document.getElementById('verifyForm');
+    const emailInput = document.getElementById('email');
+    const otpInput = document.getElementById('otp');
+    const msgBox = document.getElementById('msgBox');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const resendLink = document.getElementById('resendLink');
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('email')) emailInput.value = params.get('email');
+
+    function showMsg(text, type) {
+        msgBox.textContent = text;
+        msgBox.className = 'msg ' + type;
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        showMsg('', '');
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = 'Verifying...';
+
+        try {
+            const res = await fetch(cfg.AUTH_SERVER_URL + '/api/otp/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: emailInput.value.trim(), otp: otpInput.value.trim() })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message);
+
+            showMsg(data.message, 'success');
+            setTimeout(() => {
+                window.location.href = window.location.origin + cfg.LOGIN_PAGE + '?email=' + encodeURIComponent(emailInput.value.trim());
+            }, 1500);
+        } catch (err) {
+            showMsg(err.message, 'error');
+        } finally {
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verify';
+        }
+    });
+
+    resendLink.addEventListener('click', async () => {
+        showMsg('', '');
+        const email = emailInput.value.trim();
+        if (!email) { showMsg('Enter your email first.', 'error'); return; }
+
+        try {
+            const res = await fetch(cfg.AUTH_SERVER_URL + '/api/otp/resend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message);
+            showMsg(data.message, 'success');
+        } catch (err) {
+            showMsg(err.message, 'error');
+        }
+    });
+</script>
+</body>
+</html>
